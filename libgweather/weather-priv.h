@@ -172,6 +172,8 @@ struct _GWeatherInfoPrivate {
 #define SOL_PROGRESSION            (360./365.242191)
 #define PERIGEE_LONGITUDE(d)       (282.93768193 + (d)/36525.*0.32327364)
 
+#pragma GCC visibility push(hidden)
+
 void		metar_start_open	(GWeatherInfo *info);
 gboolean	iwin_start_open		(GWeatherInfo *info);
 void		metoffice_start_open	(GWeatherInfo *info);
@@ -200,6 +202,8 @@ gboolean	calc_moon_phases	(GWeatherInfo *info, time_t *phases);
 void		free_forecast_list	(GWeatherInfo *info);
 
 GWeatherInfo   *_gweather_info_new_clone (GWeatherInfo *info);
+
+#pragma GCC visibility pop
 
 #endif /* __WEATHER_PRIV_H_ */
 
