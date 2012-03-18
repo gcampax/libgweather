@@ -382,7 +382,7 @@ iwin_finish (SoupSession *session, SoupMessage *msg, gpointer data)
 }
 
 /* Get forecast into newly alloc'ed string */
-void
+gboolean
 iwin_start_open (GWeatherInfo *info)
 {
     GWeatherInfoPrivate *priv;
@@ -390,51 +390,55 @@ iwin_start_open (GWeatherInfo *info)
     WeatherLocation *loc;
     SoupMessage *msg;
 
-    g_return_if_fail (info != NULL);
+    g_return_val_if_fail (info != NULL, FALSE);
 
     priv = info->priv;
     loc = priv->location;
-    g_return_if_fail (loc != NULL);
+    g_return_val_if_fail (loc != NULL, FALSE);
 
-    if ((!loc->zone || loc->zone[0] == '-') && (priv->forecast_type != GWEATHER_FORECAST_LIST || !loc->latlon_valid))
-        return;
+    /* No zone (or -) means no weather information from national offices */
+    if ((!loc->zone || loc->zone[0] == '-'))
+        return FALSE;
 
-    if (priv->forecast) {
-        g_free (priv->forecast);
-        priv->forecast = NULL;
-    }
+    /* Zones starting with : are for the UK Met Office, @ is for Austrialian
+       Bureau of Metereology. GWEATHER_FORECAST_LIST only works for US, so bail
+       out early if the location is outside.
+    */
+    if (priv->forecast_type == GWEATHER_FORECAST_LIST &&
+	(loc->zone[0] == ':' || loc->zone[0] == '@'))
+	return FALSE;
 
-    free_forecast_list (info);    
+    /* We also need a pair of coordinates for GWEATHER_FORECAST_LIST */
+    if (priv->forecast_type == GWEATHER_FORECAST_LIST &&
+	!loc->latlon_valid)
+	return FALSE;
 
     if (priv->forecast_type == GWEATHER_FORECAST_LIST) {
         /* see the description here: http://www.weather.gov/forecasts/xml/ */
-        if (loc->latlon_valid) {
-            struct tm tm;
-            time_t now = time (NULL);
+	struct tm tm;
+	time_t now = time (NULL);
 
-            localtime_r (&now, &tm);
+	localtime_r (&now, &tm);
 
-            url = g_strdup_printf ("http://www.weather.gov/forecasts/xml/sample_products/browser_interface/ndfdBrowserClientByDay.php?&lat=%.02f&lon=%.02f&format=24+hourly&startDate=%04d-%02d-%02d&numDays=7",
-                       RADIANS_TO_DEGREES (loc->latitude), RADIANS_TO_DEGREES (loc->longitude), 1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday);
+	url = g_strdup_printf ("http://www.weather.gov/forecasts/xml/sample_products/browser_interface/ndfdBrowserClientByDay.php?&lat=%.02f&lon=%.02f&format=24+hourly&startDate=%04d-%02d-%02d&numDays=7",
+			       RADIANS_TO_DEGREES (loc->latitude), RADIANS_TO_DEGREES (loc->longitude), 1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday);
 
-            msg = soup_message_new ("GET", url);
-            g_free (url);
-            soup_session_queue_message (priv->session, msg, iwin_finish, info);
+	msg = soup_message_new ("GET", url);
+	g_free (url);
+	soup_session_queue_message (priv->session, msg, iwin_finish, info);
 
-            priv->requests_pending++;
-        }
-
-        return;
+	priv->requests_pending++;
+        return TRUE;
     }
 
     if (loc->zone[0] == ':') {
         /* Met Office Region Names */
         metoffice_start_open (info);
-        return;
+        return TRUE;
     } else if (loc->zone[0] == '@') {
         /* Australian BOM forecasts */
         bom_start_open (info);
-        return;
+        return TRUE;
     }
 
     /* The zone for Pittsburgh (for example) is given as PAZ021 in the locations
@@ -454,4 +458,6 @@ iwin_start_open (GWeatherInfo *info)
     soup_session_queue_message (priv->session, msg, iwin_finish, info);
 
     priv->requests_pending++;
+
+    return TRUE;
 }
