@@ -102,6 +102,7 @@ struct _GWeatherInfoPrivate {
     gboolean moonValid;
     gboolean tempMinMaxValid;
     WeatherLocation *location;
+    GWeatherLocation *world;
     GWeatherLocation *glocation;
     GWeatherUpdate update;
     GWeatherSky sky;
